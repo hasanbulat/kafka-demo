@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>sine_graph live</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 2rem; background: #f7f7f9; color: #222; }
+    canvas { background: #fff; border: 1px solid #ddd; border-radius: 6px; width: 100%; max-width: 960px; }
+    #status { font-size: 0.9rem; color: #666; }
+  </style>
+</head>
+<body>
+  <h1>y = sin(2x) + 1</h1>
+  <p id="status">Connecting...</p>
+  <canvas id="chart" width="960" height="400"></canvas>
+  <script>
+    const MAX_POINTS = 200;
+    const Y_MIN = -0.2, Y_MAX = 2.2;
+    const points = [];
+    const canvas = document.getElementById("chart");
+    const ctx = canvas.getContext("2d");
+    const status = document.getElementById("status");
+    const pad = 40;
+
+    function toY(y) {
+      return canvas.height - pad - ((y - Y_MIN) / (Y_MAX - Y_MIN)) * (canvas.height - 2 * pad);
+    }
+
+    function draw() {
+      const w = canvas.width, h = canvas.height;
+      ctx.clearRect(0, 0, w, h);
+
+      ctx.strokeStyle = "#eee";
+      ctx.fillStyle = "#888";
+      ctx.font = "12px system-ui";
+      ctx.lineWidth = 1;
+      for (const y of [0, 0.5, 1, 1.5, 2]) {
+        ctx.beginPath();
+        ctx.moveTo(pad, toY(y));
+        ctx.lineTo(w - pad, toY(y));
+        ctx.stroke();
+        ctx.fillText(y.toFixed(1), 8, toY(y) + 4);
+      }
+
+      if (points.length < 2) return;
+      const step = (w - 2 * pad) / (MAX_POINTS - 1);
+      ctx.strokeStyle = "#2563eb";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      points.forEach((p, i) => {
+        const x = pad + i * step;
+        i === 0 ? ctx.moveTo(x, toY(p.y)) : ctx.lineTo(x, toY(p.y));
+      });
+      ctx.stroke();
+    }
+
+    const source = new EventSource("/events");
+    source.onopen = () => { status.textContent = "Live: streaming from Kafka topic sine_graph"; };
+    source.onerror = () => { status.textContent = "Disconnected, retrying..."; };
+    source.onmessage = (event) => {
+      const point = JSON.parse(event.data);
+      points.push(point);
+      if (points.length > MAX_POINTS) points.shift();
+      status.textContent = `Live: x=${point.x.toFixed(3)}, y=${point.y.toFixed(3)}`;
+      draw();
+    };
+    draw();
+  </script>
+</body>
+</html>
